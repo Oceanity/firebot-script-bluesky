@@ -20,12 +20,13 @@ module.exports = {
     extensions: [".ts", ".js"],
   },
   module: {
-    rules: [
-      {
-        test: /\.ts$/,
-        loader: "ts-loader",
-      },
-    ],
+    rules: [{
+      test: /\.ts$/,
+      loader: "ts-loader",
+    }, ],
+  },
+  externals: {
+    sharp: "commonjs sharp", // Exclude sharp from Webpack bundle
   },
   optimization: {
     minimize: true,

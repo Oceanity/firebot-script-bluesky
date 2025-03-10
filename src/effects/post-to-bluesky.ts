@@ -1,8 +1,9 @@
-import { logger } from "../logger";
-import { blueskyIntegration } from "../bluesky-integration";
 import { Effects } from "@crowbartools/firebot-custom-scripts-types/types/effects";
-import { Post, PostPayload, PostReference } from "@skyware/bot";
+import { ImagePayload, Post, PostPayload, PostReference } from "@skyware/bot";
+import { imageSize } from "image-size";
+import { blueskyIntegration } from "../bluesky-integration";
 import { detectFacetsWithResolution } from "../detect-facets";
+import { logger } from "../logger";
 
 type PostToBlueskyData = {
   text: string;
@@ -244,8 +245,13 @@ export const postToBlueskyEffectType: Effects.EffectType<
         external: effect.embedType === "link" ? effect.linkUrl : undefined,
         images:
           effect.embedType === "image"
-            ? (effect.imageUrls
-                ?.map((url) => ({ data: url }))
+            ? /*((await imagePayloadsFromUrls(effect.imageUrls)).slice(
+                0,
+                4
+              ) as any)*/ (effect.imageUrls
+                .map((imageUrl) => ({
+                  data: imageUrl,
+                }))
                 .slice(0, 4) as any)
             : undefined,
         threadgate:
@@ -306,6 +312,51 @@ export const postToBlueskyEffectType: Effects.EffectType<
     }
   },
 };
+
+const imagePayloadsFromUrls = async (
+  urls: string[]
+): Promise<Array<ImagePayload>> =>
+  Promise.all(
+    urls.slice(0, 4).map(async (url) => {
+      const payload: ImagePayload = {
+        data: url,
+      };
+
+      try {
+        const response = await fetch(url);
+        if (!response.ok)
+          throw new Error(`Failed to fetch image: ${response.statusText}`);
+
+        const arrayBuffer = await response.arrayBuffer();
+        let buffer = Buffer.from(arrayBuffer);
+
+        const dimensions = imageSize(buffer);
+        if (dimensions.width > 1200) {
+          dimensions.width = 1200;
+          dimensions.height = Math.floor(
+            (dimensions.height * 1200) / dimensions.width
+          );
+        }
+        if (dimensions.height > 1200) {
+          dimensions.height = 1200;
+          dimensions.width = Math.floor(
+            (dimensions.width * 1200) / dimensions.height
+          );
+        }
+        logger.info(JSON.stringify(dimensions));
+        if (dimensions.width && dimensions.height) {
+          payload.aspectRatio = {
+            width: dimensions.width,
+            height: dimensions.height,
+          };
+        }
+      } catch (error) {
+        logger.error("Error fetching image", error);
+      }
+
+      return payload;
+    })
+  );
 
 function validateEffect(
   data: PostToBlueskyData
